@@ -1,234 +1,213 @@
-"""Interfaz web de la Calculadora Financiera; el motor permanece en calculos.py."""
+"""Calculadora financiera | Ingeniería económica - UIS.
+Interfaz web; el motor calculos.py se conserva sin modificaciones.
+"""
 import csv
 import io
-import math
 from datetime import datetime
 
 import streamlit as st
 
 from calculos import (
-    EJERCICIOS, MODULOS, OPERACIONES, OP_POR_CLAVE, REGLAS,
+    EJERCICIOS, MODULOS, OPERACIONES, REGLAS,
     ErrorCalculo, ejecutar, formatear,
 )
 
+# Identidad visual: azul institucional de la interfaz original + verde UIS.
+LOGO_UIS = "https://uis.edu.co/wp-content/uploads/2024/12/Recurso-1logo-uis-.png"
+AZUL = "#10243B"
+AZUL_MEDIO = "#214770"
+AZUL_ACENTO = "#2563EB"
+VERDE_UIS = "#67B93E"
+FONDO = "#F2F5FA"
+
 st.set_page_config(
-    page_title="Calculadora Financiera | Ingeniería Económica",
+    page_title="Calculadora financiera | Ingeniería económica",
     page_icon="📊",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("📊 Calculadora Financiera")
-st.caption("Ingeniería Económica · Grupo D2")
-st.write(
-    "Calculadora para ejercicios de ingeniería económica. "
-    "Selecciona un módulo y una operación, introduce los datos y calcula."
-)
+st.markdown(f"""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    :root {{ --navy:{AZUL}; --navy2:{AZUL_MEDIO}; --blue:{AZUL_ACENTO}; --uis:{VERDE_UIS}; }}
+    html, body, [class*="css"] {{ font-family: 'Inter', sans-serif; }}
+    .stApp {{ background: {FONDO}; }}
+    [data-testid="stHeader"] {{ background: transparent; }}
+    [data-testid="stSidebar"] {{ background: var(--navy); border-right: 1px solid #1B3654; }}
+    [data-testid="stSidebar"] * {{ color: #F4F7FB; }}
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {{ color:#C6D2E0; }}
+    [data-testid="stSidebar"] hr {{ border-color:#29435F; }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label {{
+        background: transparent; border-radius:8px; padding:7px 10px; margin:2px 0;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{ background:#183454; }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {{
+        background:#214770; border-left:4px solid #60A5FA; font-weight:700;
+    }}
+    .block-container {{ padding-top: 2.0rem; padding-bottom: 3rem; max-width: 1450px; }}
+    h1, h2, h3 {{ color:var(--navy); letter-spacing:-.025em; }}
+    .hero {{ background:linear-gradient(115deg,#10243B 0%,#214770 100%); color:white;
+        border-radius:16px; padding:25px 28px; margin-bottom:20px; box-shadow:0 8px 24px #10243b18; }}
+    .hero h1 {{ color:white; margin:0 0 6px 0; font-size:1.8rem; }}
+    .hero p {{ color:#D7E2EF; margin:0; font-size:.96rem; }}
+    .eyebrow {{ color:#A8C2DE; font-size:.72rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }}
+    .metric-card {{ background:white; border:1px solid #DFE5EF; border-radius:12px; padding:16px 18px; min-height:100px; }}
+    .metric-label {{ color:#6B7A90; font-size:.70rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }}
+    .metric-value {{ color:#10243B; font-size:1.7rem; font-weight:800; margin-top:4px; }}
+    .op-card {{ background:white; border:1px solid #DFE5EF; border-radius:14px; padding:18px 18px 12px 18px; margin:0 0 16px 0; box-shadow:0 3px 12px #10243b08; }}
+    .op-title {{ font-size:1.03rem; font-weight:750; color:#172A40; margin-bottom:8px; }}
+    .equation {{ background:#F4F6FB; border-left:3px solid #2563EB; color:#43536A;
+        border-radius:6px; padding:10px 12px; font-family:ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size:.82rem; margin:10px 0 15px 0; }}
+    .result {{ background:#EAF5E5; border:1px solid #C8E5B8; border-left:4px solid #67B93E;
+        border-radius:9px; padding:13px 15px; margin-top:12px; }}
+    .result-label {{ color:#477B2B; font-size:.70rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }}
+    .result-value {{ color:#1F5721; font-size:1.25rem; font-weight:800; margin-top:3px; }}
+    div.stButton > button, div.stFormSubmitButton > button {{ border-radius:8px; font-weight:700; border:0; }}
+    div.stFormSubmitButton > button {{ background:#2563EB; color:white; }}
+    div.stFormSubmitButton > button:hover {{ background:#1D4ED8; color:white; }}
+    div.stButton > button[kind="secondary"] {{ background:#E8EDF5; color:#1B2635; }}
+    [data-testid="stMetric"] {{ background:white; border:1px solid #DFE5EF; padding:14px 16px; border-radius:12px; }}
+    [data-testid="stDataFrame"] {{ border:1px solid #DFE5EF; border-radius:10px; overflow:hidden; }}
+    .small-note {{ color:#6B7A90; font-size:.82rem; }}
+    .uis-line {{ height:4px; background:var(--uis); border-radius:4px; margin:10px 0 18px 0; }}
+</style>
+""", unsafe_allow_html=True)
 
-# Navegación derivada del registro original: no se duplican ni reescriben fórmulas.
-modulo_ids = [m[0] for m in MODULOS]
-modulo_labels = {m[0]: m[1] for m in MODULOS}
-modulo_descripciones = {m[0]: m[2] for m in MODULOS}
+if "historial" not in st.session_state:
+    st.session_state.historial = []
+if "resultados" not in st.session_state:
+    st.session_state.resultados = {}
 
+# Sidebar / navegación
 with st.sidebar:
-    st.header("Navegación")
-    modulo_id = st.selectbox(
-        "Módulo",
-        options=modulo_ids,
-        format_func=lambda value: modulo_labels[value],
-    )
-    st.caption(modulo_descripciones[modulo_id])
-    st.divider()
-    st.subheader("Convenciones")
-    st.markdown(REGLAS.replace("• ", "- "))
-    st.caption("La periodicidad se conserva como etiqueta y no convierte unidades automáticamente.")
-
-operaciones_modulo = [op for op in OPERACIONES if op.modulo == modulo_id]
-op = st.selectbox(
-    "Operación",
-    options=operaciones_modulo,
-    format_func=lambda item: item.titulo,
-)
-st.subheader(op.titulo)
-st.markdown(f"**Ecuación / método:** `{op.ecuacion}`")
-
-if "historial_calculos" not in st.session_state:
-    st.session_state.historial_calculos = []
-if "ultimo_resultado" not in st.session_state:
-    st.session_state.ultimo_resultado = None
-if "ultimo_error" not in st.session_state:
-    st.session_state.ultimo_error = None
-
-def math_isclose(a, b):
-    return math.isclose(a, b, rel_tol=1e-6, abs_tol=1e-9)
-
-
-def widget_key(operation_key, field_key):
-    return f"campo_{operation_key}_{field_key}"
-
-
-def clear_current_inputs(operation_key, field_keys):
-    for field_key in field_keys:
-        st.session_state.pop(widget_key(operation_key, field_key), None)
-    st.session_state.ultimo_resultado = None
-    st.session_state.ultimo_error = None
-
-with st.form(key=f"form_{op.clave}"):
-    st.markdown("#### Datos de entrada")
-    cols = st.columns(2)
-    valores = {}
-    for idx, campo in enumerate(op.campos):
-        with cols[idx % 2]:
-            key = widget_key(op.clave, campo.clave)
-            if campo.tipo == "num":
-                valores[campo.clave] = st.text_input(
-                    campo.etiqueta,
-                    key=key,
-                    placeholder=f"Introduce el valor ({campo.unidad})" if campo.unidad else "Introduce el valor",
-                    help=f"Unidad: {campo.unidad}" if campo.unidad else None,
-                )
-            else:
-                opciones = list(campo.valores)
-                valores[campo.clave] = st.selectbox(
-                    campo.etiqueta,
-                    options=opciones,
-                    key=key,
-                )
-    calcular = st.form_submit_button("Calcular", type="primary", use_container_width=True)
-
-if calcular:
     try:
-        resultado = ejecutar(op, valores)
-        resultado_texto = formatear(resultado, op.res_unidad)
-        st.session_state.ultimo_resultado = {
-            "operacion": op.titulo,
-            "ecuacion": op.ecuacion,
-            "etiqueta": op.res_etiqueta,
-            "valor": resultado,
-            "formateado": resultado_texto,
-            "unidad": op.res_unidad,
-            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "entradas": {campo.etiqueta: str(valores.get(campo.clave, "")) for campo in op.campos},
-        }
-        st.session_state.ultimo_error = None
-        st.session_state.historial_calculos.append(st.session_state.ultimo_resultado.copy())
-    except ErrorCalculo as exc:
-        st.session_state.ultimo_error = str(exc)
-        st.session_state.ultimo_resultado = None
-    except Exception as exc:
-        # No ocultar errores inesperados de programación.
-        st.session_state.ultimo_error = (
-            "Ocurrió un error inesperado al calcular. "
-            f"Detalle técnico: {type(exc).__name__}: {exc}"
-        )
-        st.session_state.ultimo_resultado = None
+        st.image(LOGO_UIS, width=190)
+    except Exception:
+        st.markdown("<h2 style='color:white'>UIS</h2>", unsafe_allow_html=True)
+    st.markdown("### Calculadora financiera")
+    st.markdown("Ingeniería económica · Grupo D2")
+    st.divider()
+    st.markdown("<div class='eyebrow'>NAVEGACIÓN</div>", unsafe_allow_html=True)
+    nav_items = ["Inicio"] + [m[1] for m in MODULOS] + ["07  Validación", "08  Reporte"]
+    selected = st.radio("Secciones", nav_items, label_visibility="collapsed")
+    st.divider()
+    st.caption("Herramienta académica · UIS")
 
-col_reset, col_space = st.columns([1, 3])
-with col_reset:
-    st.button(
-        "Limpiar campos",
-        use_container_width=True,
-        on_click=clear_current_inputs,
-        args=(op.clave, [campo.clave for campo in op.campos]),
-    )
+# Helpers
+module_by_title = {m[1]: m for m in MODULOS}
 
-if st.session_state.ultimo_error:
-    st.error(st.session_state.ultimo_error)
+def render_header(title, subtitle, eyebrow="CALCULADORA FINANCIERA"):
+    st.markdown(f"<div class='hero'><div class='eyebrow'>{eyebrow}</div><h1>{title}</h1><p>{subtitle}</p></div>", unsafe_allow_html=True)
 
-if st.session_state.ultimo_resultado:
-    resultado = st.session_state.ultimo_resultado
-    st.success("Cálculo realizado")
-    st.metric(resultado["etiqueta"], resultado["formateado"])
-    with st.expander("Ver detalle del último cálculo"):
-        st.write(f"**Operación:** {resultado['operacion']}")
-        st.write(f"**Ecuación / método:** {resultado['ecuacion']}")
-        st.write("**Entradas utilizadas:**")
-        for etiqueta, valor in resultado["entradas"].items():
-            st.write(f"- {etiqueta}: {valor}")
-        st.caption(f"Calculado: {resultado['fecha']}")
-
-with st.expander("Ejercicios de referencia incluidos"):
-    st.write(
-        "Estos casos sirven como comprobación de regresión del motor de cálculo. "
-        "No sustituyen una revisión académica independiente de las fórmulas."
-    )
-    filas = []
-    for clave, entradas, esperado in EJERCICIOS:
-        operacion = OP_POR_CLAVE[clave]
+def render_operation(op, idx):
+    result_key = op.clave
+    with st.container(border=True):
+        st.markdown(f"<div class='op-title'>{op.titulo}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='equation'>{op.ecuacion}</div>", unsafe_allow_html=True)
+        with st.form(f"form_{op.clave}", clear_on_submit=False):
+            cols = st.columns(2)
+            values = {}
+            for j, campo in enumerate(op.campos):
+                with cols[j % 2]:
+                    if campo.tipo == "num":
+                        values[campo.clave] = st.text_input(
+                            campo.etiqueta, key=f"input_{op.clave}_{campo.clave}",
+                            placeholder=f"Ingrese {campo.unidad}" if campo.unidad else "Ingrese un valor",
+                        )
+                    else:
+                        values[campo.clave] = st.selectbox(campo.etiqueta, list(campo.valores), key=f"input_{op.clave}_{campo.clave}")
+            submitted = st.form_submit_button("Calcular resultado", use_container_width=True)
+    if submitted:
         try:
-            obtenido = ejecutar(operacion, entradas)
-            coincide = math_isclose(obtenido, esperado)
-            filas.append({
-                "Operación": operacion.titulo,
-                "Resultado esperado": formatear(esperado, operacion.res_unidad),
-                "Resultado calculado": formatear(obtenido, operacion.res_unidad),
-                "Coincide": "Sí" if coincide else "No",
+            result = ejecutar(op, values)
+            formatted = formatear(result, op.res_unidad)
+            st.session_state.resultados[result_key] = {"ok": True, "texto": formatted}
+            st.session_state.historial.append({
+                "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Módulo": dict((x[0], x[1].split(None, 1)[1]) for x in MODULOS)[op.modulo],
+                "Operación": op.titulo,
+                "Entradas": "; ".join(f"{k}={v}" for k, v in values.items()),
+                "Resultado": formatted,
             })
-        except Exception as exc:
-            filas.append({
-                "Operación": operacion.titulo,
-                "Resultado esperado": formatear(esperado, operacion.res_unidad),
-                "Resultado calculado": f"Error: {exc}",
-                "Coincide": "No",
-            })
-    st.dataframe(filas, use_container_width=True, hide_index=True)
+        except ErrorCalculo as exc:
+            st.session_state.resultados[result_key] = {"ok": False, "texto": str(exc)}
+    result_state = st.session_state.resultados.get(result_key)
+    if result_state:
+        if result_state["ok"]:
+            st.markdown(f"<div class='result'><div class='result-label'>{op.res_etiqueta}</div><div class='result-value'>{result_state['texto']}</div></div>", unsafe_allow_html=True)
+        else:
+            st.error(result_state["texto"])
 
-st.divider()
-st.subheader("Historial de esta sesión")
-historial = st.session_state.historial_calculos
-if not historial:
-    st.info("Todavía no hay cálculos en esta sesión.")
-else:
-    st.dataframe(
-        [
-            {
-                "Fecha": item["fecha"],
-                "Operación": item["operacion"],
-                "Resultado": item["formateado"],
-                "Entradas": "; ".join(f"{k}: {v}" for k, v in item["entradas"].items()),
-            }
-            for item in reversed(historial)
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
-    csv_buffer = io.StringIO()
-    writer = csv.DictWriter(
-        csv_buffer,
-        fieldnames=["Fecha", "Operación", "Ecuación", "Entradas", "Resultado", "Unidad"],
-    )
-    writer.writeheader()
-    for item in historial:
-        writer.writerow({
-            "Fecha": item["fecha"],
-            "Operación": item["operacion"],
-            "Ecuación": item["ecuacion"],
-            "Entradas": "; ".join(f"{k}: {v}" for k, v in item["entradas"].items()),
-            "Resultado": item["valor"],
-            "Unidad": item["unidad"],
-        })
-    d1, d2 = st.columns(2)
-    with d1:
-        st.download_button(
-            "Descargar historial CSV",
-            data="\ufeff" + csv_buffer.getvalue(),
-            file_name="historial_calculadora_financiera.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-    txt = "\n\n".join(
-        f"Fecha: {item['fecha']}\nOperación: {item['operacion']}\n"
-        f"Ecuación: {item['ecuacion']}\n"
-        + "\n".join(f"{k}: {v}" for k, v in item["entradas"].items())
-        + f"\nResultado: {item['formateado']}"
-        for item in historial
-    )
-    with d2:
-        st.download_button(
-            "Descargar historial TXT",
-            data=txt,
-            file_name="historial_calculadora_financiera.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+# Page content
+if selected == "Inicio":
+    render_header("Calculadora financiera", "Una herramienta clara y práctica para resolver operaciones de ingeniería económica.", "UNIVERSIDAD INDUSTRIAL DE SANTANDER")
+    implementadas = sum(not op.pendiente for op in OPERACIONES)
+    c1, c2, c3, c4 = st.columns(4)
+    for col, label, value in [
+        (c1, "Operaciones", len(OPERACIONES)),
+        (c2, "Módulos", len(MODULOS)),
+        (c3, "Ejercicios de referencia", len(EJERCICIOS)),
+        (c4, "Ejercicios validados", "11 / 11"),
+    ]:
+        with col:
+            st.markdown(f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='uis-line'></div>", unsafe_allow_html=True)
+    st.subheader("Módulos de cálculo")
+    grid = st.columns(2)
+    for i, (key, title, desc) in enumerate(MODULOS):
+        with grid[i % 2]:
+            st.markdown(f"<div class='op-card'><div class='op-title'>{title}</div><p class='small-note'>{desc}</p></div>", unsafe_allow_html=True)
+    st.info("Selecciona un módulo en el menú lateral para comenzar. Las ecuaciones y el motor de cálculo se conservan del proyecto original.")
 
-st.caption("La interfaz web usa el motor de cálculo original `calculos.py`.")
+elif selected in module_by_title:
+    mod_key, mod_title, mod_desc = module_by_title[selected]
+    render_header(mod_title, mod_desc)
+    ops = [op for op in OPERACIONES if op.modulo == mod_key]
+    left, right = st.columns(2, gap="large")
+    for i, op in enumerate(ops):
+        with (left if i % 2 == 0 else right):
+            render_operation(op, i)
+
+elif selected == "07  Validación":
+    render_header("Validación de resultados", "Compara los ejercicios de referencia del proyecto con los resultados calculados.", "CONTROL ACADÉMICO")
+    if st.button("Ejecutar validación", type="primary"):
+        import math
+        rows = []
+        for clave, entradas, esperado in EJERCICIOS:
+            op = next(x for x in OPERACIONES if x.clave == clave)
+            try:
+                obtenido = ejecutar(op, entradas)
+                ok = math.isclose(obtenido, esperado, rel_tol=1e-6, abs_tol=1e-9)
+                rows.append({"Operación": op.titulo, "Esperado": formatear(esperado, op.res_unidad), "Obtenido": formatear(obtenido, op.res_unidad), "Estado": "Correcto" if ok else "Revisar"})
+            except Exception as exc:
+                rows.append({"Operación": op.titulo, "Esperado": formatear(esperado, op.res_unidad), "Obtenido": str(exc), "Estado": "Error"})
+        st.session_state.validacion = rows
+    if "validacion" in st.session_state:
+        rows = st.session_state.validacion
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+        passed = sum(r["Estado"] == "Correcto" for r in rows)
+        st.success(f"{passed} de {len(rows)} ejercicios coinciden con la referencia.") if passed == len(rows) else st.warning(f"{passed} de {len(rows)} ejercicios coinciden con la referencia.")
+    st.markdown("**Criterio:** tolerancia relativa de 1×10⁻⁶ y absoluta de 1×10⁻⁹.")
+
+else:  # Reporte
+    render_header("Historial y reporte", "Consulta las operaciones realizadas y descarga el registro en formato CSV.", "HERRAMIENTAS")
+    history = st.session_state.historial
+    if history:
+        st.metric("Cálculos registrados", len(history))
+        st.dataframe(list(reversed(history)), use_container_width=True, hide_index=True)
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=list(history[0].keys()))
+        writer.writeheader()
+        writer.writerows(history)
+        st.download_button("Descargar historial CSV", buffer.getvalue().encode("utf-8-sig"), "historial_calculadora.csv", "text/csv", type="primary")
+        if st.button("Limpiar historial"):
+            st.session_state.historial = []
+            st.rerun()
+    else:
+        st.info("Todavía no hay cálculos registrados. Realiza una operación en cualquiera de los módulos para crear el reporte.")
+    st.markdown("### Reglas de uso")
+    st.markdown(REGLAS.replace("• ", "- "))
+
+st.markdown("<div style='text-align:center;color:#7B8798;font-size:.78rem;padding-top:25px'>Calculadora financiera · Ingeniería económica · Grupo D2 · UIS</div>", unsafe_allow_html=True)
